@@ -1,7 +1,11 @@
 (function () {
   const config = window.APP_CONFIG || {};
   const hasSupabaseConfig = Boolean(config.supabaseUrl && config.supabaseAnonKey);
-  const functionsBaseUrl = config.functionsBaseUrl || (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1` : "");
+  // 关键修改：如果 config.functionsBaseUrl 是空字符串，就保持为空字符串（禁用后端）
+  // 只有当未定义时，才自动拼接默认的 functions/v1 路径
+  const functionsBaseUrl = config.functionsBaseUrl === undefined
+    ? (config.supabaseUrl ? `${config.supabaseUrl}/functions/v1` : "")
+    : config.functionsBaseUrl;
   const client = hasSupabaseConfig ? window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey) : null;
 
   const els = {
@@ -52,20 +56,27 @@
     if (!client) {
       setAuthMessage("未配置 Supabase 时会使用本地兜底回应，不会保存档案。");
       renderArchive([]);
+      updateAuthUi(); // 确保界面初始状态正确
       return;
     }
 
     const { data } = await client.auth.getSession();
     session = data.session;
+    updateAuthUi(); // 立即根据 session 更新界面
+
     client.auth.onAuthStateChange((event, nextSession) => {
       session = nextSession;
-      updateAuthUi();
-      loadEntries();
-      if (event === "SIGNED_IN") recordTelemetry("login_completed");
+      updateAuthUi(); // 登录/登出时立即刷新界面
+      if (event === "SIGNED_IN") {
+        loadEntries();
+        recordTelemetry("login_completed").catch(() => {});
+      } else if (event === "SIGNED_OUT") {
+        renderArchive([]);
+      }
     });
-    updateAuthUi();
-    recordTelemetry("page_view");
+
     await loadEntries();
+    recordTelemetry("page_view").catch(() => {});
   }
 
   async function handleAuthToggle() {
@@ -77,10 +88,15 @@
 
     if (session) {
       await client.auth.signOut();
+      // 退出后立即更新 UI
+      updateAuthUi();
+      renderArchive([]);
       return;
     }
 
-    els.authPanel.hidden = !els.authPanel.hidden;
+    // 未登录状态：显示登录面板，并确保其他元素状态正确
+    els.authPanel.hidden = false;
+    els.authStatus.textContent = "";
   }
 
   async function handleMagicLink(event) {
@@ -121,7 +137,10 @@
       currentEntryId = null;
       currentReflection = reflection;
       renderReflection(reflection);
-      setAuthMessage(`动态服务暂时不可用，已使用本地兜底回应。${error.message ? ` (${error.message})` : ""}`);
+      // 只在确实需要提示时才显示（例如网络错误但用户期望保存时）
+      if (functionsBaseUrl) {
+        setAuthMessage(`动态服务暂时不可用，已使用本地兜底回应。${error.message ? ` (${error.message})` : ""}`);
+      }
     } finally {
       setBusy(false);
     }
@@ -180,7 +199,7 @@
         body: JSON.stringify({ eventName, metadata })
       });
     } catch (_error) {
-      // Analytics should never block the reflection experience.
+      // 完全静默，不影响用户体验
     }
   }
 
@@ -278,16 +297,17 @@
     renderReflection(currentReflection);
   }
 
+  // 修复后的界面更新函数：确保登录/未登录时面板和按钮正确显示
   function updateAuthUi() {
     if (session) {
       els.authToggle.textContent = "退出";
-      els.authPanel.hidden = true;
+      els.authPanel.hidden = true;      // 登录后强制隐藏邮箱面板
       els.sessionState.textContent = "已登录。生成后会保存到你的私密档案。";
-      return;
+    } else {
+      els.authToggle.textContent = "登录保存";
+      els.authPanel.hidden = true;      // 未登录时默认隐藏面板，点击按钮才显示
+      els.sessionState.textContent = "未登录时仅生成当次回应。";
     }
-
-    els.authToggle.textContent = "登录保存";
-    els.sessionState.textContent = "未登录时仅生成当次回应。";
   }
 
   function setAuthMessage(message) {
@@ -350,6 +370,7 @@
     URL.revokeObjectURL(url);
   }
 
+  // 以下是本地预设的反射和聊天回应（保持不变）
   function localReflect(text) {
     const crisis = /自杀|轻生|不想活|结束生命|伤害自己|活不下去|suicide|kill myself/i.test(text);
     if (crisis) {
