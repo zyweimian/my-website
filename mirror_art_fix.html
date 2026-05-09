@@ -1,0 +1,236 @@
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=Noto+Serif+SC:wght@300;400&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f7f4ef;font-family:'Noto Serif SC',STSong,'宋体',serif;color:#2c2420;font-size:16px}
+.wrap{max-width:580px;margin:0 auto;padding:44px 24px 72px}
+.date{font-size:12px;color:#a89880;letter-spacing:2px;margin-bottom:52px;font-family:'Lora',serif;font-style:italic}
+.prompt{font-size:22px;color:#2c2420;line-height:1.7;margin-bottom:32px;font-family:'Lora',serif;font-weight:400}
+textarea{width:100%;min-height:150px;background:transparent;border:none;border-bottom:1px solid #d4c8b8;outline:none;font-family:'Noto Serif SC',STSong,'宋体',serif;font-size:15px;line-height:2.1;color:#2c2420;resize:none;padding:8px 0;caret-color:#8b6f5e;transition:border-color 0.3s}
+textarea:focus{border-color:#8b6f5e}
+textarea::placeholder{color:#c4b4a0}
+.hint{font-size:12px;color:#b8a898;margin-top:10px;letter-spacing:1px}
+.submit-row{margin-top:32px;display:flex;align-items:center;gap:12px;cursor:pointer;border:none;background:none;padding:0}
+.line{width:32px;height:1px;background:#8b6f5e;transition:width 0.5s ease}
+.submit-row:hover .line{width:52px}
+.submit-row:disabled .line{background:#d4c8b8}
+.submit-label{font-family:'Lora',serif;font-size:14px;color:#8b6f5e;letter-spacing:2px}
+.submit-row:disabled .submit-label{color:#c4b4a0}
+.thinking{display:none;margin-top:40px;font-family:'Lora',serif;font-size:13px;color:#b8a898;font-style:italic;letter-spacing:1px}
+.dot{display:inline-block;animation:blink 1.4s infinite}
+.dot:nth-child(2){animation-delay:.2s}
+.dot:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+.result{display:none;margin-top:56px;opacity:0;transition:opacity 0.8s ease}
+.result.show{opacity:1}
+.rule{width:36px;height:1px;background:#d4c8b8;margin-bottom:44px}
+.block{margin-bottom:48px}
+.blabel{font-size:11px;color:#b8a898;letter-spacing:3px;margin-bottom:18px}
+.state{font-size:16px;line-height:2;color:#2c2420;font-family:'Lora',serif}
+.direction{margin-top:20px;padding:18px 20px;background:#f0ebe3;border-left:2px solid #8b6f5e}
+.dlabel{font-size:11px;color:#8b6f5e;letter-spacing:2px;margin-bottom:8px}
+.dtext{font-size:15px;line-height:1.9;color:#2c2420;font-family:'Lora',serif}
+.quote-body{font-size:17px;line-height:2.1;color:#3d3028;font-family:'Lora',serif;font-style:italic;margin-bottom:12px}
+.quote-from{font-size:12px;color:#a89880;letter-spacing:2px}
+.art-box{background:#fff;border:0.5px solid #e8ddd0;border-radius:4px;overflow:hidden}
+.art-foot{padding:14px 18px;display:flex;justify-content:space-between;align-items:center;border-top:0.5px solid #ede6da}
+.art-note{font-size:12px;color:#b8a898;font-family:'Lora',serif;font-style:italic}
+.art-btn{font-size:12px;color:#8b6f5e;border:none;background:none;cursor:pointer;letter-spacing:1px;font-family:'Noto Serif SC',STSong,'宋体',serif}
+.art-btn:hover{text-decoration:underline;text-underline-offset:3px}
+.chat-area{margin-top:48px}
+.chat-msgs{display:flex;flex-direction:column;gap:22px;margin-bottom:24px}
+.msg-u{font-size:14px;color:#8b6f5e;font-family:'Lora',serif;font-style:italic;padding-bottom:14px;border-bottom:0.5px solid #ede6da}
+.msg-a{font-size:15px;line-height:2;color:#2c2420;font-family:'Lora',serif}
+.chat-row{display:flex;align-items:flex-end;gap:12px;border-top:0.5px solid #d4c8b8;padding-top:14px}
+.chat-in{flex:1;background:transparent;border:none;outline:none;font-family:'Lora',serif;font-size:14px;color:#2c2420;caret-color:#8b6f5e;padding:4px 0}
+.chat-in::placeholder{color:#c4b4a0;font-style:italic}
+.chat-btn{border:none;background:none;font-family:'Lora',serif;font-size:13px;color:#8b6f5e;cursor:pointer;white-space:nowrap;letter-spacing:1px}
+.chat-btn:hover{text-decoration:underline;text-underline-offset:3px}
+</style>
+
+<div class="wrap">
+  <div class="date" id="dt"></div>
+  <div class="prompt">今天，你在想什么？</div>
+  <textarea id="ta" placeholder="写下来吧。不用完整，不用漂亮。"></textarea>
+  <div class="hint">写完后，我会帮你看清楚。</div>
+  <button class="submit-row" id="sbtn" onclick="go()">
+    <div class="line"></div>
+    <span class="submit-label">照见</span>
+  </button>
+  <div class="thinking" id="thinking">正在感知<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
+
+  <div class="result" id="result">
+    <div class="rule"></div>
+    <div class="block">
+      <div class="blabel">你现在的处境</div>
+      <div class="state" id="stateEl"></div>
+      <div class="direction">
+        <div class="dlabel">今天可以做的一件事</div>
+        <div class="dtext" id="dirEl"></div>
+      </div>
+    </div>
+    <div class="block">
+      <div class="blabel">有人曾经在这里</div>
+      <div class="quote-body" id="qbody"></div>
+      <div class="quote-from" id="qfrom"></div>
+    </div>
+    <div class="block">
+      <div class="blabel">今天的留念</div>
+      <div class="art-box">
+        <svg id="artSvg" viewBox="0 0 560 320" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%"></svg>
+        <div class="art-foot">
+          <span class="art-note" id="anote"></span>
+          <button class="art-btn" onclick="saveImg()">保存图片</button>
+        </div>
+      </div>
+    </div>
+    <div class="chat-area">
+      <div class="blabel">继续说</div>
+      <div class="chat-msgs" id="cms"></div>
+      <div class="chat-row">
+        <input class="chat-in" id="cin" placeholder="还有什么想说的……" onkeydown="if(event.key==='Enter')reply()">
+        <button class="chat-btn" onclick="reply()">发出 →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const now = new Date();
+document.getElementById('dt').textContent =
+  now.getFullYear() + ' · ' + String(now.getMonth()+1).padStart(2,'0') + ' · ' + String(now.getDate()).padStart(2,'0');
+
+const presets = [
+  {
+    keywords:['工作','职业','方向','迷茫','不知道','找不到','毕业','转行'],
+    state:'你现在像站在十字路口，但路牌的字都模糊了。不是你能力不够，是你还没有足够的信息来做判断。',
+    dir:'今天花20分钟，列出三件做起来不觉得累的事——不问有没有用，只问累不累。',
+    quote:'我不知道我要去哪里，但我已经在路上了。',
+    from:'凯鲁亚克 · 《在路上》作者，27岁时仍四处漂泊',
+    word:'路',c1:'#7a6050',c2:'#c4a882',c3:'#e8d8c0'
+  },
+  {
+    keywords:['焦虑','压力','睡不着','担心','害怕','紧张','恐慌'],
+    state:'那种说不清楚的焦虑，往往不是怯懦，是你比别人更早感知到了某种真实的风险。',
+    dir:'今晚睡前，把脑子里最担心的那件事写下来——只写这一件，写完就放下。',
+    quote:'我们受苦，不是因为事情本身，而是因为我们对事情的想法。',
+    from:'马可·奥勒留 · 罗马皇帝，每日在战乱中写作《沉思录》',
+    word:'静',c1:'#5a7060',c2:'#8aaa90',c3:'#c8e0d0'
+  },
+  {
+    keywords:['孤独','没有朋友','不被理解','一个人','社交','陌生'],
+    state:'你想要的那种被真正理解的连接很少见。这不是你的问题，是你对关系的要求是真实的。',
+    dir:'今天给一个许久没联系的人发一句话，不用解释，就说"最近想到你了"。',
+    quote:'孤独是一所学校，如果你能撑过去，你会懂得很多事。',
+    from:'卡夫卡 · 一生独自写作，死后才被世界看见',
+    word:'见',c1:'#5a5878',c2:'#8a88b8',c3:'#d0d0e8'
+  },
+  {
+    keywords:['累','疲惫','放弃','坚持不下去','没动力','撑不住'],
+    state:'你现在的疲惫不是懒惰，是一个信号——某些东西需要重新分配，不是意志力，是精力。',
+    dir:'今天允许自己停下来一小时，什么都不做，不带愧疚感。',
+    quote:'休息不是终点，是为了走得更远。',
+    from:'约翰·缪尔 · 自然主义者，曾独行荒野数月以恢复力量',
+    word:'息',c1:'#607880',c2:'#90b0b8',c3:'#d0e8ec'
+  }
+];
+
+const fallback = {
+  state:'你把这些写出来，本身就是一种勇气。大多数人选择继续往前冲，而你停下来看了自己一眼。',
+  dir:'今天找五分钟，离开手机，坐着，什么都不想，就是坐着。',
+  quote:'认识你自己。',
+  from:'苏格拉底 · 一生没有留下文字，却改变了整个西方哲学',
+  word:'知',c1:'#8b6f5e',c2:'#c4a882',c3:'#e8ddd0'
+};
+
+const chatReplies = [
+  '你说的这个感觉，我听到了。能再说说，这种感觉是从什么时候开始的？',
+  '有时候我们最清楚自己在逃避什么，只是不想承认。你觉得你现在在回避什么？',
+  '你说的"不确定"，是没有信心，还是真的不知道要什么？这两个是不同的问题。',
+  '很多人在这个位置待过。区别在于，有些人停了一年，有些人停了一个月。你愿意给自己多少时间？',
+  '我注意到你一直在说"应该"。把它换成"我想"，重新说一遍，感觉有没有不一样？'
+];
+let replyIdx = 0;
+let currentData = null;
+
+function match(text) {
+  for (const p of presets) {
+    if (p.keywords.some(k => text.includes(k))) return p;
+  }
+  return fallback;
+}
+
+function go() {
+  const text = document.getElementById('ta').value.trim();
+  if (!text) { document.getElementById('ta').focus(); return; }
+  document.getElementById('sbtn').disabled = true;
+  document.getElementById('thinking').style.display = 'block';
+  setTimeout(() => {
+    currentData = match(text);
+    const d = currentData;
+    document.getElementById('stateEl').textContent = d.state;
+    document.getElementById('dirEl').textContent = d.dir;
+    document.getElementById('qbody').textContent = '\u201c' + d.quote + '\u201d';
+    document.getElementById('qfrom').textContent = '\u2014\u2014 ' + d.from;
+    drawSvgArt(d.word, d.c1, d.c2, d.c3);
+    document.getElementById('anote').textContent = d.word + ' · ' + now.toLocaleDateString('zh-CN');
+    document.getElementById('thinking').style.display = 'none';
+    const r = document.getElementById('result');
+    r.style.display = 'block';
+    setTimeout(() => r.classList.add('show'), 30);
+  }, 1800);
+}
+
+function ha(hex, a) {
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return 'rgba('+r+','+g+','+b+','+a+')';
+}
+
+function drawSvgArt(word, c1, c2, c3) {
+  const svg = document.getElementById('artSvg');
+  const W = 560, H = 320, cx = W/2, cy = H/2;
+  let html = '<rect width="560" height="320" fill="#faf7f2"/>';
+  const radii = [30,65,100,135,168,200];
+  radii.forEach(r => {
+    html += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${c3}" stroke-width="0.5" opacity="0.6"/>`;
+  });
+  for (let i = 0; i < 12; i++) {
+    const a = (i/12)*Math.PI*2;
+    const x2 = cx + Math.cos(a)*260, y2 = cy + Math.sin(a)*260;
+    html += `<line x1="${cx}" y1="${cy}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${c2}" stroke-width="0.4" opacity="0.18"/>`;
+  }
+  const dateStr = now.getFullYear() + '年' + (now.getMonth()+1) + '月' + now.getDate() + '日';
+  html += `<text x="${cx}" y="${cy+6}" text-anchor="middle" dominant-baseline="middle" font-size="120" fill="${c1}" opacity="0.07" font-family="STSong,SimSun,serif">${word}</text>`;
+  html += `<text x="${cx}" y="${cy+6}" text-anchor="middle" dominant-baseline="middle" font-size="120" fill="${c1}" opacity="0.75" font-family="STSong,SimSun,serif">${word}</text>`;
+  html += `<text x="${cx}" y="${H-28}" text-anchor="middle" font-size="13" fill="${c1}" opacity="0.32" font-family="STSong,SimSun,serif">${dateStr}</text>`;
+  svg.innerHTML = html;
+}
+
+function saveImg() {
+  const svg = document.getElementById('artSvg');
+  const xml = new XMLSerializer().serializeToString(svg);
+  const blob = new Blob([xml], {type:'image/svg+xml'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = '今天_' + now.toLocaleDateString('zh-CN') + '.svg';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function reply() {
+  const inp = document.getElementById('cin');
+  const msg = inp.value.trim();
+  if (!msg) return;
+  inp.value = '';
+  const cms = document.getElementById('cms');
+  const u = document.createElement('div');
+  u.className = 'msg-u'; u.textContent = msg;
+  cms.appendChild(u);
+  setTimeout(() => {
+    const a = document.createElement('div');
+    a.className = 'msg-a';
+    a.textContent = chatReplies[replyIdx % chatReplies.length];
+    replyIdx++;
+    cms.appendChild(a);
+  }, 900);
+}
+</script>
