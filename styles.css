@@ -233,6 +233,13 @@ input::placeholder {
   letter-spacing: 1px;
 }
 
+.runtime-status {
+  margin: 18px 0 0;
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
 .thinking span {
   animation: blink 1.4s infinite;
 }

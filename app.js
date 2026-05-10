@@ -12,6 +12,8 @@
       })
     : null;
 
+  window.zhaojianSupabase = client;
+
   const els = {
     today: document.getElementById("today"),
     authToggle: document.getElementById("authToggle"),
@@ -23,6 +25,7 @@
     useMemory: document.getElementById("useMemory"),
     sessionState: document.getElementById("sessionState"),
     reflectBtn: document.getElementById("reflectBtn"),
+    runtimeStatus: document.getElementById("runtimeStatus"),
     thinking: document.getElementById("thinking"),
     result: document.getElementById("result"),
     stateText: document.getElementById("stateText"),
@@ -75,13 +78,38 @@
     });
 
     updateAuthUi();
+    exposeDebugState();
     recordTelemetry("page_view");
     await loadEntries();
   }
 
   async function consumeAuthCallbackIfNeeded() {
     const params = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const authError = params.get("error_description") || hashParams.get("error_description");
+    if (authError) {
+      setAuthMessage(`登录失败：${authError}`);
+      return;
+    }
+
     const code = params.get("code");
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+
+    if (accessToken && refreshToken) {
+      const { error } = await client.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      });
+      if (error) {
+        setAuthMessage(`登录回调失败：${error.message}`);
+        return;
+      }
+
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
     if (!code) return;
 
     const { error } = await client.auth.exchangeCodeForSession(code);
@@ -136,6 +164,7 @@
     }
 
     setBusy(true);
+    setRuntimeStatus("");
     clearChat();
 
     try {
@@ -147,7 +176,7 @@
       currentReflection = reflection;
       renderReflection(reflection);
       if (reflection.source === "fallback" && reflection.errorCode) {
-        setAuthMessage(`已连接动态函数，但本次使用兜底回应：${reflection.errorCode}`);
+        setRuntimeStatus(`已连接动态函数，但本次使用兜底回应：${reflection.errorCode}`);
       }
       await loadEntries();
     } catch (error) {
@@ -155,7 +184,7 @@
       currentEntryId = null;
       currentReflection = reflection;
       renderReflection(reflection);
-      setAuthMessage(`动态服务暂时不可用，已使用本地兜底回应。${error.message ? `（${error.message}）` : ""}`);
+      setRuntimeStatus(`动态服务暂时不可用，已使用本地兜底回应。${error.message ? `（${error.message}）` : ""}`);
     } finally {
       setBusy(false);
     }
@@ -178,7 +207,7 @@
       });
       appendMessage("ai", result.reply);
       if (result.source === "fallback" && result.errorCode) {
-        setAuthMessage(`继续说使用了兜底回应：${result.errorCode}`);
+        setRuntimeStatus(`继续说使用了兜底回应：${result.errorCode}`);
       }
     } catch (_error) {
       appendMessage("ai", localChatReply(message));
@@ -337,15 +366,36 @@
       els.authToggle.textContent = "退出";
       els.authPanel.hidden = true;
       els.sessionState.textContent = "已登录。生成后会保存到你的私密档案。";
+      exposeDebugState();
       return;
     }
 
     els.authToggle.textContent = "登录保存";
     els.sessionState.textContent = "未登录时仅生成当次回应。";
+    exposeDebugState();
+  }
+
+  function exposeDebugState() {
+    window.zhaojianSession = session;
+    window.zhaojianDebug = async function () {
+      const { data, error } = await client.auth.getSession();
+      return {
+        hasClient: Boolean(client),
+        hasSession: Boolean(data?.session),
+        userEmail: data?.session?.user?.email || null,
+        error: error?.message || null,
+        location: window.location.href
+      };
+    };
   }
 
   function setAuthMessage(message) {
     els.authStatus.textContent = message;
+  }
+
+  function setRuntimeStatus(message) {
+    els.runtimeStatus.textContent = message;
+    els.runtimeStatus.hidden = !message;
   }
 
   function setBusy(isBusy) {
