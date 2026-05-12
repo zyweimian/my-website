@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>照见</title>
+  <meta name="description" content="一个私密、安静的 AI 自我照见工具。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=Noto+Serif+SC:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <!-- 书本主体 -->
+    <section class="book" aria-label="照见之书">
+      <!-- 书脊装饰 -->
+      <div class="book-spine" aria-hidden="true">
+        <div class="spine-inner">
+          <span class="spine-text">照见</span>
+          <span class="spine-ribbon"></span>
+        </div>
+      </div>
+
+      <!-- 左侧页面：书写区 -->
+      <div class="page page-left" id="pageLeft">
+        <div class="page-content">
+          <header class="topbar">
+            <div>
+              <p class="date" id="today"></p>
+              <h1>今天，你在想什么？</h1>
+            </div>
+            <button class="quiet-btn" id="authToggle" type="button">登录保存</button>
+          </header>
+
+          <div class="auth-panel" id="authPanel" hidden>
+            <p class="panel-title">用邮箱保存你的私密档案</p>
+            <form class="auth-form" id="authForm">
+              <input id="emailInput" type="email" autocomplete="email" placeholder="you@example.com" required>
+              <button type="submit">发送登录链接</button>
+            </form>
+            <p class="fineprint" id="authStatus">不会公开展示你的文字。登录后，你可以删除单条记录或清空全部档案。</p>
+          </div>
+
+          <textarea id="thoughtInput" placeholder="写下来吧。不用完整，不用漂亮。"></textarea>
+          <div class="options-row">
+            <label class="check">
+              <input id="useMemory" type="checkbox">
+              <span>参考过去记录</span>
+            </label>
+            <span id="sessionState">未登录时仅生成当次回应。</span>
+          </div>
+
+          <button class="submit-row" id="reflectBtn" type="button">
+            <span class="line"></span>
+            <span>照见</span>
+          </button>
+        </div>
+        <div class="page-shadow"></div>
+      </div>
+
+      <!-- 右侧页面：结果区 -->
+      <div class="page page-right" id="pageRight">
+        <div class="page-content">
+          <p class="runtime-status" id="runtimeStatus" hidden></p>
+          <div class="thinking" id="thinking" hidden>正在感知<span>.</span><span>.</span><span>.</span></div>
+
+          <section class="result" id="result" hidden aria-live="polite">
+            <div class="rule"></div>
+
+            <article class="block">
+              <p class="block-label">你现在的处境</p>
+              <p class="state" id="stateText"></p>
+              <div class="direction">
+                <p>今天可以做的一件事</p>
+                <div id="actionText"></div>
+              </div>
+            </article>
+
+            <article class="block">
+              <p class="block-label">一句可以带走的话</p>
+              <p class="quote" id="quoteText"></p>
+            </article>
+
+            <article class="block">
+              <p class="block-label">今天的留念</p>
+              <div class="art-box">
+                <svg id="artSvg" viewBox="0 0 560 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="今日留念图"></svg>
+                <div class="art-foot">
+                  <span id="artNote"></span>
+                  <button type="button" id="saveArtBtn">保存图片</button>
+                </div>
+              </div>
+            </article>
+
+            <article class="block">
+              <p class="block-label">继续说</p>
+              <div class="chat-msgs" id="chatMessages"></div>
+              <form class="chat-row" id="chatForm">
+                <input id="chatInput" autocomplete="off" placeholder="还有什么想说的……">
+                <button type="submit">发出</button>
+              </form>
+            </article>
+          </section>
+        </div>
+        <div class="page-shadow"></div>
+      </div>
+
+      <!-- 翻页角 -->
+      <div class="page-corner" id="pageCorner" aria-label="翻页" role="button" tabindex="0">
+        <div class="corner-curl"></div>
+      </div>
+    </section>
+
+    <aside class="archive" aria-label="私密档案">
+      <div class="archive-head">
+        <div>
+          <p class="block-label">私密档案</p>
+          <h2>只属于你的记录</h2>
+        </div>
+        <button class="quiet-btn danger" id="clearDataBtn" type="button" hidden>清空</button>
+      </div>
+      <div id="archiveList" class="archive-list">
+        <p class="empty">登录后，这里会保存你选择留下的照见记录。</p>
+      </div>
+    </aside>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
