@@ -41,6 +41,52 @@
     clearDataBtn: document.getElementById("clearDataBtn")
   };
 
+  // ==============================================
+  // 翻页状态机
+  // ==============================================
+  const PAGE_STATE = {
+    INPUT: 'input',
+    REFLECTING: 'reflecting',
+    RESULT: 'result',
+  };
+
+  let pageState = PAGE_STATE.INPUT;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let isSwiping = false;
+
+  const bookEl = document.querySelector('.book');
+
+  function setPageState(newState) {
+    pageState = newState;
+    bookEl.className = 'book';
+
+    switch (newState) {
+      case PAGE_STATE.INPUT:
+        bookEl.classList.add('showing-input');
+        break;
+      case PAGE_STATE.REFLECTING:
+        bookEl.classList.add('curling');
+        break;
+      case PAGE_STATE.RESULT:
+        bookEl.classList.add('flipping');
+        break;
+    }
+  }
+
+  function flipToResult() {
+    setPageState(PAGE_STATE.REFLECTING);
+
+    setTimeout(() => {
+      setPageState(PAGE_STATE.RESULT);
+      document.getElementById('pageRight').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 700);
+  }
+
+  function flipBackToInput() {
+    setPageState(PAGE_STATE.INPUT);
+  }
+
   const today = new Date();
   let session = null;
   let currentEntryId = null;
@@ -48,6 +94,7 @@
 
   els.today.textContent = `${today.getFullYear()} · ${String(today.getMonth() + 1).padStart(2, "0")} · ${String(today.getDate()).padStart(2, "0")}`;
   bindEvents();
+  setPageState(PAGE_STATE.INPUT);
   boot();
 
   function bindEvents() {
@@ -57,6 +104,24 @@
     els.chatForm.addEventListener("submit", handleChat);
     els.saveArtBtn.addEventListener("click", saveArt);
     els.clearDataBtn.addEventListener("click", clearAccountData);
+
+    // 翻页事件
+    document.getElementById('pageCorner').addEventListener('click', () => {
+      if (pageState === PAGE_STATE.RESULT) {
+        flipBackToInput();
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && pageState === PAGE_STATE.RESULT) {
+        flipBackToInput();
+      }
+    });
+
+    const bookContainer = document.querySelector('.book');
+    bookContainer.addEventListener('touchstart', handleTouchStart, { passive: true });
+    bookContainer.addEventListener('touchmove', handleTouchMove, { passive: true });
+    bookContainer.addEventListener('touchend', handleTouchEnd, { passive: true });
   }
 
   async function boot() {
@@ -179,12 +244,17 @@
         setRuntimeStatus(`已连接动态函数，但本次使用兜底回应：${reflection.errorCode}`);
       }
       await loadEntries();
+
+      // 触发翻页动画
+      flipToResult();
     } catch (error) {
       const reflection = localReflect(text);
       currentEntryId = null;
       currentReflection = reflection;
       renderReflection(reflection);
       setRuntimeStatus(`动态服务暂时不可用，已使用本地兜底回应。${error.message ? `（${error.message}）` : ""}`);
+
+      flipToResult();
     } finally {
       setBusy(false);
     }
@@ -485,6 +555,53 @@
 
   function fallbackArt() {
     return { word: "知", colors: ["#8b6f5e", "#c4a882", "#e8ddd0"] };
+  }
+
+  // ==============================================
+  // 手势处理
+  // ==============================================
+  function handleTouchStart(e) {
+    if (e.touches.length !== 1) return;
+
+    const target = e.target;
+    if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') return;
+
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    isSwiping = false;
+  }
+
+  function handleTouchMove(e) {
+    if (touchStartX === 0) return;
+
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = e.touches[0].clientY - touchStartY;
+
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
+      isSwiping = true;
+    }
+  }
+
+  function handleTouchEnd(e) {
+    if (!isSwiping) {
+      touchStartX = 0;
+      touchStartY = 0;
+      return;
+    }
+
+    const dx = e.changedTouches[0].clientX - touchStartX;
+
+    if (dx < -60 && pageState === PAGE_STATE.INPUT) {
+      if (els.thoughtInput.value.trim()) {
+        handleReflect();
+      }
+    } else if (dx > 60 && pageState === PAGE_STATE.RESULT) {
+      flipBackToInput();
+    }
+
+    touchStartX = 0;
+    touchStartY = 0;
+    isSwiping = false;
   }
 
   function escapeHtml(value) {

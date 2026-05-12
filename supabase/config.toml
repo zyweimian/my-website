@@ -1,0 +1,16 @@
+project_id = "private-reflection-tool"
+
+[functions.reflect]
+verify_jwt = false
+
+[functions.chat]
+verify_jwt = false
+
+[functions.telemetry]
+verify_jwt = false
+
+[functions.entries]
+verify_jwt = true
+
+[functions.account-data]
+verify_jwt = true
