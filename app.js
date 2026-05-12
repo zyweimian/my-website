@@ -12,6 +12,8 @@
       })
     : null;
 
+  window.zhaojianSupabase = client;
+
   const els = {
     today: document.getElementById("today"),
     authToggle: document.getElementById("authToggle"),
@@ -23,6 +25,7 @@
     useMemory: document.getElementById("useMemory"),
     sessionState: document.getElementById("sessionState"),
     reflectBtn: document.getElementById("reflectBtn"),
+    runtimeStatus: document.getElementById("runtimeStatus"),
     thinking: document.getElementById("thinking"),
     result: document.getElementById("result"),
     stateText: document.getElementById("stateText"),
@@ -38,6 +41,52 @@
     clearDataBtn: document.getElementById("clearDataBtn")
   };
 
+  // ==============================================
+  // 翻页状态机
+  // ==============================================
+  const PAGE_STATE = {
+    INPUT: 'input',
+    REFLECTING: 'reflecting',
+    RESULT: 'result',
+  };
+
+  let pageState = PAGE_STATE.INPUT;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let isSwiping = false;
+
+  const bookEl = document.querySelector('.book');
+
+  function setPageState(newState) {
+    pageState = newState;
+    bookEl.className = 'book';
+
+    switch (newState) {
+      case PAGE_STATE.INPUT:
+        bookEl.classList.add('showing-input');
+        break;
+      case PAGE_STATE.REFLECTING:
+        bookEl.classList.add('curling');
+        break;
+      case PAGE_STATE.RESULT:
+        bookEl.classList.add('flipping');
+        break;
+    }
+  }
+
+  function flipToResult() {
+    setPageState(PAGE_STATE.REFLECTING);
+
+    setTimeout(() => {
+      setPageState(PAGE_STATE.RESULT);
+      document.getElementById('pageRight').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 700);
+  }
+
+  function flipBackToInput() {
+    setPageState(PAGE_STATE.INPUT);
+  }
+
   const today = new Date();
   let session = null;
   let currentEntryId = null;
@@ -45,6 +94,7 @@
 
   els.today.textContent = `${today.getFullYear()} · ${String(today.getMonth() + 1).padStart(2, "0")} · ${String(today.getDate()).padStart(2, "0")}`;
   bindEvents();
+  setPageState(PAGE_STATE.INPUT);
   boot();
 
   function bindEvents() {
@@ -54,6 +104,24 @@
     els.chatForm.addEventListener("submit", handleChat);
     els.saveArtBtn.addEventListener("click", saveArt);
     els.clearDataBtn.addEventListener("click", clearAccountData);
+
+    // 翻页事件
+    document.getElementById('pageCorner').addEventListener('click', () => {
+      if (pageState === PAGE_STATE.RESULT) {
+        flipBackToInput();
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && pageState === PAGE_STATE.RESULT) {
+        flipBackToInput();
+      }
+    });
+
+    const bookContainer = document.querySelector('.book');
+    bookContainer.addEventListener('touchstart', handleTouchStart, { passive: true });
+    bookContainer.addEventListener('touchmove', handleTouchMove, { passive: true });
+    bookContainer.addEventListener('touchend', handleTouchEnd, { passive: true });
   }
 
   async function boot() {
@@ -75,13 +143,38 @@
     });
 
     updateAuthUi();
+    exposeDebugState();
     recordTelemetry("page_view");
     await loadEntries();
   }
 
   async function consumeAuthCallbackIfNeeded() {
     const params = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const authError = params.get("error_description") || hashParams.get("error_description");
+    if (authError) {
+      setAuthMessage(`登录失败：${authError}`);
+      return;
+    }
+
     const code = params.get("code");
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+
+    if (accessToken && refreshToken) {
+      const { error } = await client.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      });
+      if (error) {
+        setAuthMessage(`登录回调失败：${error.message}`);
+        return;
+      }
+
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
     if (!code) return;
 
     const { error } = await client.auth.exchangeCodeForSession(code);
@@ -136,6 +229,7 @@
     }
 
     setBusy(true);
+    setRuntimeStatus("");
     clearChat();
 
     try {
@@ -147,15 +241,20 @@
       currentReflection = reflection;
       renderReflection(reflection);
       if (reflection.source === "fallback" && reflection.errorCode) {
-        setAuthMessage(`已连接动态函数，但本次使用兜底回应：${reflection.errorCode}`);
+        setRuntimeStatus(`已连接动态函数，但本次使用兜底回应：${reflection.errorCode}`);
       }
       await loadEntries();
+
+      // 触发翻页动画
+      flipToResult();
     } catch (error) {
       const reflection = localReflect(text);
       currentEntryId = null;
       currentReflection = reflection;
       renderReflection(reflection);
-      setAuthMessage(`动态服务暂时不可用，已使用本地兜底回应。${error.message ? `（${error.message}）` : ""}`);
+      setRuntimeStatus(`动态服务暂时不可用，已使用本地兜底回应。${error.message ? `（${error.message}）` : ""}`);
+
+      flipToResult();
     } finally {
       setBusy(false);
     }
@@ -178,7 +277,7 @@
       });
       appendMessage("ai", result.reply);
       if (result.source === "fallback" && result.errorCode) {
-        setAuthMessage(`继续说使用了兜底回应：${result.errorCode}`);
+        setRuntimeStatus(`继续说使用了兜底回应：${result.errorCode}`);
       }
     } catch (_error) {
       appendMessage("ai", localChatReply(message));
@@ -337,15 +436,36 @@
       els.authToggle.textContent = "退出";
       els.authPanel.hidden = true;
       els.sessionState.textContent = "已登录。生成后会保存到你的私密档案。";
+      exposeDebugState();
       return;
     }
 
     els.authToggle.textContent = "登录保存";
     els.sessionState.textContent = "未登录时仅生成当次回应。";
+    exposeDebugState();
+  }
+
+  function exposeDebugState() {
+    window.zhaojianSession = session;
+    window.zhaojianDebug = async function () {
+      const { data, error } = await client.auth.getSession();
+      return {
+        hasClient: Boolean(client),
+        hasSession: Boolean(data?.session),
+        userEmail: data?.session?.user?.email || null,
+        error: error?.message || null,
+        location: window.location.href
+      };
+    };
   }
 
   function setAuthMessage(message) {
     els.authStatus.textContent = message;
+  }
+
+  function setRuntimeStatus(message) {
+    els.runtimeStatus.textContent = message;
+    els.runtimeStatus.hidden = !message;
   }
 
   function setBusy(isBusy) {
@@ -435,6 +555,53 @@
 
   function fallbackArt() {
     return { word: "知", colors: ["#8b6f5e", "#c4a882", "#e8ddd0"] };
+  }
+
+  // ==============================================
+  // 手势处理
+  // ==============================================
+  function handleTouchStart(e) {
+    if (e.touches.length !== 1) return;
+
+    const target = e.target;
+    if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') return;
+
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    isSwiping = false;
+  }
+
+  function handleTouchMove(e) {
+    if (touchStartX === 0) return;
+
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = e.touches[0].clientY - touchStartY;
+
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
+      isSwiping = true;
+    }
+  }
+
+  function handleTouchEnd(e) {
+    if (!isSwiping) {
+      touchStartX = 0;
+      touchStartY = 0;
+      return;
+    }
+
+    const dx = e.changedTouches[0].clientX - touchStartX;
+
+    if (dx < -60 && pageState === PAGE_STATE.INPUT) {
+      if (els.thoughtInput.value.trim()) {
+        handleReflect();
+      }
+    } else if (dx > 60 && pageState === PAGE_STATE.RESULT) {
+      flipBackToInput();
+    }
+
+    touchStartX = 0;
+    touchStartY = 0;
+    isSwiping = false;
   }
 
   function escapeHtml(value) {

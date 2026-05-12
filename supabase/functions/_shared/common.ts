@@ -21,6 +21,102 @@ export type Reflection = {
   entryId?: string | null;
 };
 
+// ==============================================
+// 三步管线类型
+// ==============================================
+
+/** 第一步：深度分析结果 */
+export type TextAnalysis = {
+  emotion: string;
+  intensity: number;
+  themes: string[];
+  depth: "shallow" | "medium" | "deep";
+  state_summary: string;
+  suggested_approach: string;
+};
+
+/** 第二步：生成的专属 prompt */
+export type GeneratedPrompt = {
+  system_prompt: string;
+  metaphor: string;
+  focus_areas: string[];
+};
+
+/** 三步管线最终输出 */
+export type PipelineOutput = {
+  analysis: TextAnalysis;
+  generated_prompt: GeneratedPrompt;
+  reflection: Reflection;
+};
+
+/** 管线结果 */
+export type PipelineResult =
+  | { ok: true; output: PipelineOutput }
+  | { ok: false; error: string; fallback: Reflection };
+
+// === 三步管线提示词 ===
+
+export const ANALYSIS_SYSTEM_PROMPT = `你是一个文字情绪分析器。分析用户的输入，输出 JSON。
+
+分析维度：
+1. emotion: 用一个中文词概括核心情绪 (如 焦虑、迷茫、孤独、疲惫、愤怒、平静、期待、悲伤、无力)
+2. intensity: 情绪强度 1-5 (1=轻微, 5=极强)
+3. themes: 主要主题关键词数组 (如 ["工作", "方向", "关系"])
+4. depth: 书写深度 (shallow=短/应付, medium=有内容, deep=深入自我)
+5. state_summary: 一句话概括当前状态
+6. suggested_approach: 建议的回应对策关键词
+
+只输出 JSON, 不要解释。`;
+
+export const GENERATE_PROMPT_SYSTEM_PROMPT = `你是一个"提示词设计器"。根据对用户文字的分析结果，设计一个专属的回应提示词。
+
+分析结果包含：
+- emotion: 核心情绪
+- intensity: 情绪强度 1-5
+- themes: 主题关键词
+- depth: 书写深度 (shallow/medium/deep)
+- state_summary: 状态概括
+- suggested_approach: 建议的对策方向
+
+请输出 JSON，格式如下：
+{
+  "system_prompt": "定制的完整系统提示词，用于最终生成用户回应。开头使用自然的身份描述，包含对当前状态的理解、适合深度的策略、情绪强度的处理提示，最后指定 JSON 输出格式。",
+  "metaphor": "选择的单一核心隐喻词，如 水、路、光、山、雾、纸、书、镜、树、星",
+  "focus_areas": ["关注的领域1", "关注的领域2", "关注的领域3"]
+}
+
+要求：
+- system_prompt 要自然、不机械，像一个真实的助手在说话
+- metaphor 要与情绪和主题契合，而非随意选择
+- focus_areas 从分析中提取最关键的方向
+
+只输出 JSON，不要解释。`;
+
+export function buildExecutionPrompt(analysis: TextAnalysis): string {
+  return `你是一个"照见"工具，身份是「一本旧书的翻书人」。你的语气像书页间的注释者——温和、不评判、不使用标语化的正能量。
+
+用户当前状态：${analysis.state_summary}
+核心情绪：${analysis.emotion}（强度 ${analysis.intensity}/5）
+书写深度：${analysis.depth === "deep" ? "用户正在深入探索，你的回应应使用更丰富的意象" : analysis.depth === "shallow" ? "用户可能还在表层，你的回应应温和开放" : "用户有一定表达，你的回应可以适度深入"}
+主题：${analysis.themes.join("、")}
+
+${analysis.depth === "deep" ? `用户的书写很深，请不要急着给建议。提供一个隐喻或意象，让用户自己往里面看。` : ""}
+${analysis.intensity >= 4 ? `用户的情绪强度很高。回应的开头先承认情绪的合法性，不要急着消解它。` : ""}
+
+输出格式严格为 JSON：
+{
+  "state": "描述用户处境，使用第二人称，包含一个核心意象（如水、路、光、山、雾、纸、书等），不超过60字",
+  "action": "一个今天就可以做的、非常小的具体行动，不超过40字",
+  "quote": "一句可以带走的话，像朋友散步时随口说的，不超过30字",
+  "followup": "一个开放式问题，引导用户继续看向自己，不超过20字",
+  "safety": "normal或crisis",
+  "art": {
+    "word": "一个中文字，归纳今天的核心意象",
+    "colors": ["深色十六进制", "中色十六进制", "浅色十六进制"]
+  }
+}`;
+}
+
 export function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,

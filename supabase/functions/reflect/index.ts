@@ -7,8 +7,9 @@ import {
   json,
   parseProviderReflection,
   recordEvent,
-  text
+  text,
 } from "../_shared/common.ts";
+import { runPipeline } from "../_shared/pipeline.ts";
 
 type ProviderResult = {
   reflection: ReturnType<typeof fallbackReflection>;
@@ -30,12 +31,36 @@ Deno.serve(async (req) => {
   if (inputText.length > 4000) return text("Text is too long", 400);
 
   const history = user && useMemory ? await loadHistory(authorization) : [];
-  let result = await generateReflection(inputText, history);
-  let reflection = result.reflection;
+
+  // 尝试三步管线，失败时降级到传统单次调用
+  let reflection;
+  let source: "ai" | "fallback" = "fallback";
+  let errorCode: string | null = null;
+
+  const pipelineResult = await runPipeline(inputText);
+
+  if (pipelineResult.ok) {
+    reflection = pipelineResult.output.reflection;
+    source = "ai";
+    errorCode = null;
+
+    console.log("pipeline_analysis", JSON.stringify({
+      emotion: pipelineResult.output.analysis.emotion,
+      intensity: pipelineResult.output.analysis.intensity,
+      themes: pipelineResult.output.analysis.themes,
+      depth: pipelineResult.output.analysis.depth,
+    }));
+  } else {
+    const tradResult = await generateTraditional(inputText, history);
+    reflection = tradResult.reflection;
+    source = tradResult.source;
+    errorCode = pipelineResult.error || tradResult.errorCode;
+  }
 
   if (isCrisisText(inputText)) {
     reflection = fallbackReflection(inputText);
-    result = { reflection, source: "fallback", errorCode: "crisis_safety_override" };
+    source = "fallback";
+    errorCode = "crisis_safety_override";
   }
 
   let entryId: string | null = null;
@@ -50,7 +75,7 @@ Deno.serve(async (req) => {
         quote: reflection.quote,
         followup: reflection.followup,
         safety: reflection.safety,
-        art: reflection.art
+        art: reflection.art,
       })
       .select("id")
       .single();
@@ -62,12 +87,12 @@ Deno.serve(async (req) => {
     signed_in: Boolean(user),
     use_memory: useMemory,
     safety: reflection.safety,
-    source: result.source,
-    error_code: result.errorCode,
-    input_length_bucket: bucketLength(inputText.length)
+    source,
+    error_code: errorCode,
+    input_length_bucket: bucketLength(inputText.length),
   });
 
-  return json({ ...reflection, source: result.source, errorCode: result.errorCode, entryId });
+  return json({ ...reflection, source, errorCode, entryId });
 });
 
 async function loadHistory(authorization: string | null) {
@@ -80,7 +105,10 @@ async function loadHistory(authorization: string | null) {
   return data ?? [];
 }
 
-async function generateReflection(inputText: string, history: Array<Record<string, string>>): Promise<ProviderResult> {
+async function generateTraditional(
+  inputText: string,
+  history: Array<Record<string, string>>,
+): Promise<ProviderResult> {
   const apiKey = Deno.env.get("DEEPSEEK_API_KEY");
   const model = Deno.env.get("DEEPSEEK_MODEL") || "deepseek-v4-flash";
   const baseUrl = Deno.env.get("DEEPSEEK_BASE_URL") || "https://api.deepseek.com";
@@ -89,7 +117,7 @@ async function generateReflection(inputText: string, history: Array<Record<strin
     return {
       reflection: fallbackReflection(inputText),
       source: "fallback",
-      errorCode: "missing_deepseek_api_key"
+      errorCode: "missing_deepseek_api_key",
     };
   }
 
@@ -99,7 +127,7 @@ async function generateReflection(inputText: string, history: Array<Record<strin
     "如果文本涉及自伤、自杀、危险计划或强烈危机，输出 safety=crisis，并建议联系可信任的人、当地紧急服务或专业资源。",
     "只输出 JSON，不要 markdown。",
     "JSON 字段必须是：state, action, quote, followup, safety, art。",
-    "art 必须包含 word（1 个中文字符）和 colors（3 个十六进制颜色）。"
+    "art 必须包含 word（1 个中文字符）和 colors（3 个十六进制颜色）。",
   ].join("\n");
 
   try {
@@ -107,7 +135,7 @@ async function generateReflection(inputText: string, history: Array<Record<strin
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model,
@@ -120,11 +148,11 @@ async function generateReflection(inputText: string, history: Array<Record<strin
             role: "user",
             content: JSON.stringify({
               current_text: inputText,
-              optional_history: history
-            })
-          }
-        ]
-      })
+              optional_history: history,
+            }),
+          },
+        ],
+      }),
     });
 
     if (!response.ok) {
@@ -132,7 +160,7 @@ async function generateReflection(inputText: string, history: Array<Record<strin
       return {
         reflection: fallbackReflection(inputText),
         source: "fallback",
-        errorCode: `deepseek_http_${response.status}`
+        errorCode: `deepseek_http_${response.status}`,
       };
     }
 
@@ -140,14 +168,14 @@ async function generateReflection(inputText: string, history: Array<Record<strin
     return {
       reflection: parseProviderReflection(data.choices?.[0]?.message?.content ?? "", inputText),
       source: "ai",
-      errorCode: null
+      errorCode: null,
     };
   } catch (error) {
     console.error("DeepSeek reflection request errored", error);
     return {
       reflection: fallbackReflection(inputText),
       source: "fallback",
-      errorCode: "deepseek_request_error"
+      errorCode: "deepseek_request_error",
     };
   }
 }
