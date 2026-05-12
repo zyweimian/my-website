@@ -43,10 +43,6 @@ button {
   gap: 48px;
 }
 
-.workspace {
-  min-width: 0;
-}
-
 .topbar,
 .archive-head,
 .options-row,
@@ -501,6 +497,7 @@ input::placeholder {
   background: var(--white);
   transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   transform-style: preserve-3d;
+  will-change: transform;
 }
 
 .page-left {
@@ -604,20 +601,21 @@ input::placeholder {
 
 .book.curling .page-left {
   animation: pageCurl 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  will-change: transform;
 }
 
 @keyframes pageCurl {
   0% {
-    clip-path: inset(0 0 0 0);
     transform: rotateY(0deg);
+    filter: brightness(1);
   }
-  40% {
-    clip-path: inset(0 30% 0 0);
-    transform: rotateY(-8deg);
+  50% {
+    transform: rotateY(-10deg) scale(0.99);
+    filter: brightness(0.97);
   }
   100% {
-    clip-path: inset(0 0 0 0);
     transform: rotateY(-15deg) scale(0.98);
+    filter: brightness(0.98);
   }
 }
 
