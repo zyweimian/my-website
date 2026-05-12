@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
   if (req.method === "GET") {
     const { data, error } = await authClient(req.headers.get("Authorization"))
       .from("reflection_entries")
-      .select("id, input_text, state, action, quote, followup, safety, art, created_at")
+      .select("id, input_text, entry, safety, art, created_at")
       .order("created_at", { ascending: false })
       .limit(30);
 

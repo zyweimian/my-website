@@ -82,7 +82,7 @@ export async function analyzeText(text: string): Promise<TextAnalysis | null> {
     system: ANALYSIS_SYSTEM_PROMPT,
     userContent: text,
     temperature: 0.4,
-    maxTokens: 300,
+    maxTokens: 400,
     responseFormat: "json_object",
   });
 
@@ -97,7 +97,9 @@ export async function analyzeText(text: string): Promise<TextAnalysis | null> {
       depth: ["shallow", "medium", "deep"].includes(parsed.depth)
         ? parsed.depth as "shallow" | "medium" | "deep"
         : "medium",
-      state_summary: String(parsed.state_summary || "").slice(0, 100),
+      state_summary: String(parsed.state_summary || "").slice(0, 120),
+      core_need: String(parsed.core_need || "被倾听和理解").slice(0, 60),
+      listening_tone: String(parsed.listening_tone || "温柔而深刻").slice(0, 30),
       suggested_approach: String(parsed.suggested_approach || "").slice(0, 100),
     };
   } catch {
@@ -111,7 +113,7 @@ export async function generatePromptAI(analysis: TextAnalysis): Promise<Generate
     system: GENERATE_PROMPT_SYSTEM_PROMPT,
     userContent: JSON.stringify(analysis),
     temperature: 0.6,
-    maxTokens: 500,
+    maxTokens: 600,
     responseFormat: "json_object",
   });
 
@@ -125,6 +127,8 @@ export async function generatePromptAI(analysis: TextAnalysis): Promise<Generate
       focus_areas: Array.isArray(parsed.focus_areas)
         ? parsed.focus_areas.slice(0, 3).map(String)
         : [`情绪: ${analysis.emotion} (强度 ${analysis.intensity})`, `主题: ${analysis.themes.join(", ")}`],
+      response_identity: String(parsed.response_identity || "").slice(0, 100) || undefined,
+      tone_guide: String(parsed.tone_guide || "").slice(0, 80) || undefined,
     };
   } catch {
     return null;
@@ -149,12 +153,25 @@ export async function executeReflection(
   inputText: string,
   generatedPrompt: GeneratedPrompt,
 ): Promise<Reflection | null> {
+  // 构建 enriched system prompt
+  const parts: string[] = [];
+
+  if (generatedPrompt.response_identity) {
+    parts.push(`你的身份：${generatedPrompt.response_identity}`);
+  }
+  if (generatedPrompt.tone_guide) {
+    parts.push(`语气：${generatedPrompt.tone_guide}`);
+  }
+
+  parts.push(generatedPrompt.system_prompt);
+  const systemPrompt = parts.join("\n\n");
+
   const content = await callDeepSeek({
-    system: generatedPrompt.system_prompt,
+    system: systemPrompt,
     userContent: inputText,
-    temperature: 0.7,
-    maxTokens: 900,
-    responseFormat: "json_object",
+    temperature: 0.75,
+    maxTokens: 1200,
+    responseFormat: "text",
   });
 
   if (!content) return null;
@@ -212,6 +229,7 @@ export async function runPipeline(inputText: string): Promise<PipelineResult> {
       intensity: analysis.intensity,
       themes: analysis.themes,
       depth: analysis.depth,
+      core_need: analysis.core_need,
       metaphor: generatedPrompt.metaphor,
     }),
   );

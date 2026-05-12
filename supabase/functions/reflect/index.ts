@@ -49,6 +49,7 @@ Deno.serve(async (req) => {
       intensity: pipelineResult.output.analysis.intensity,
       themes: pipelineResult.output.analysis.themes,
       depth: pipelineResult.output.analysis.depth,
+      core_need: pipelineResult.output.analysis.core_need,
     }));
   } else {
     const tradResult = await generateTraditional(inputText, history);
@@ -70,10 +71,7 @@ Deno.serve(async (req) => {
       .insert({
         user_id: user.id,
         input_text: inputText,
-        state: reflection.state,
-        action: reflection.action,
-        quote: reflection.quote,
-        followup: reflection.followup,
+        entry: reflection.entry,
         safety: reflection.safety,
         art: reflection.art,
       })
@@ -98,7 +96,7 @@ Deno.serve(async (req) => {
 async function loadHistory(authorization: string | null) {
   const { data } = await authClient(authorization)
     .from("reflection_entries")
-    .select("state, action, quote, created_at")
+    .select("entry, created_at")
     .order("created_at", { ascending: false })
     .limit(5);
 
@@ -122,12 +120,12 @@ async function generateTraditional(
   }
 
   const system = [
-    "你是一个中文私密自我照见工具，不是心理医生。",
-    "语气温柔、安静、克制，不诊断，不承诺治疗，不制造依赖。",
-    "如果文本涉及自伤、自杀、危险计划或强烈危机，输出 safety=crisis，并建议联系可信任的人、当地紧急服务或专业资源。",
-    "只输出 JSON，不要 markdown。",
-    "JSON 字段必须是：state, action, quote, followup, safety, art。",
-    "art 必须包含 word（1 个中文字符）和 colors（3 个十六进制颜色）。",
+    "你是一个温柔的日志守护者和倾听者。有一个人刚刚向你敞开了心里话。",
+    "请写一段温暖的回应：",
+    "第一段——接住他。告诉他你听到了什么，让他感到被理解。",
+    "第二段——陪伴他。分享一个视角或意象，帮助他从不同光线下看看自己的处境。",
+    "第三段——留白。用一个温柔的开放式问题收尾。",
+    "用'你'来称呼，像在写信。语言自然、有温度。不要用列表或标题。不用输出 JSON。",
   ].join("\n");
 
   try {
@@ -139,9 +137,8 @@ async function generateTraditional(
       },
       body: JSON.stringify({
         model,
-        temperature: 0.7,
-        max_tokens: 900,
-        response_format: { type: "json_object" },
+        temperature: 0.75,
+        max_tokens: 1200,
         messages: [
           { role: "system", content: system },
           {

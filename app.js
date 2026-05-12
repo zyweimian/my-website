@@ -28,9 +28,9 @@
     runtimeStatus: document.getElementById("runtimeStatus"),
     thinking: document.getElementById("thinking"),
     result: document.getElementById("result"),
-    stateText: document.getElementById("stateText"),
-    actionText: document.getElementById("actionText"),
-    quoteText: document.getElementById("quoteText"),
+    entryText: document.getElementById("entryText"),
+    followupBox: document.getElementById("followupBox"),
+    followupText: document.getElementById("followupText"),
     artSvg: document.getElementById("artSvg"),
     artNote: document.getElementById("artNote"),
     saveArtBtn: document.getElementById("saveArtBtn"),
@@ -105,23 +105,11 @@
     els.saveArtBtn.addEventListener("click", saveArt);
     els.clearDataBtn.addEventListener("click", clearAccountData);
 
-    // 翻页事件
-    document.getElementById('pageCorner').addEventListener('click', () => {
-      if (pageState === PAGE_STATE.RESULT) {
-        flipBackToInput();
-      }
-    });
-
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && pageState === PAGE_STATE.RESULT) {
         flipBackToInput();
       }
     });
-
-    const bookContainer = document.querySelector('.book');
-    bookContainer.addEventListener('touchstart', handleTouchStart, { passive: true });
-    bookContainer.addEventListener('touchmove', handleTouchMove, { passive: true });
-    bookContainer.addEventListener('touchend', handleTouchEnd, { passive: true });
   }
 
   async function boot() {
@@ -241,18 +229,16 @@
       currentReflection = reflection;
       renderReflection(reflection);
       if (reflection.source === "fallback" && reflection.errorCode) {
-        setRuntimeStatus(`已连接动态函数，但本次使用兜底回应：${reflection.errorCode}`);
+        setRuntimeStatus(`本次使用兜底回应：${reflection.errorCode}`);
       }
       await loadEntries();
-
-      // 触发翻页动画
       flipToResult();
     } catch (error) {
       const reflection = localReflect(text);
       currentEntryId = null;
       currentReflection = reflection;
       renderReflection(reflection);
-      setRuntimeStatus(`动态服务暂时不可用，已使用本地兜底回应。${error.message ? `（${error.message}）` : ""}`);
+      setRuntimeStatus(`动态服务暂时不可用，已使用本地兜底回应。`);
 
       flipToResult();
     } finally {
@@ -323,9 +309,7 @@
         headers,
         body: JSON.stringify({ eventName, metadata })
       });
-    } catch (_error) {
-      // Analytics should never block the reflection experience.
-    }
+    } catch (_error) { /* Analytics should never block */ }
   }
 
   async function loadEntries() {
@@ -377,13 +361,21 @@
     await loadEntries();
   }
 
+  /** 渲染回信 */
   function renderReflection(data) {
-    els.stateText.textContent = data.state;
-    els.actionText.textContent = data.action;
-    els.quoteText.textContent = data.quote;
+    // 正文：书信体
+    els.entryText.textContent = data.entry || "";
+
+    // 追问（如果有）
+    if (data.followup) {
+      els.followupText.textContent = data.followup;
+      els.followupBox.hidden = false;
+    } else {
+      els.followupBox.hidden = true;
+    }
+
     drawArt(data.art || fallbackArt());
     els.result.hidden = false;
-    els.result.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function renderArchive(entries) {
@@ -404,9 +396,10 @@
       const card = document.createElement("article");
       card.className = "entry-card";
       const created = new Date(entry.created_at).toLocaleDateString("zh-CN");
+      const preview = (entry.entry || entry.input_text || "").slice(0, 80);
       card.innerHTML = `
         <p class="entry-date">${created}</p>
-        <p class="entry-title">${escapeHtml(entry.state || entry.input_text.slice(0, 56))}</p>
+        <p class="entry-title">${escapeHtml(preview)}</p>
         <div class="entry-actions">
           <button type="button" data-open="${entry.id}">回看</button>
           <button type="button" class="danger" data-delete="${entry.id}">删除</button>
@@ -421,14 +414,13 @@
   function openEntry(entry) {
     currentEntryId = entry.id;
     currentReflection = {
-      state: entry.state,
-      action: entry.action,
-      quote: entry.quote,
+      entry: entry.entry,
       art: entry.art
     };
     els.thoughtInput.value = entry.input_text || "";
     clearChat();
     renderReflection(currentReflection);
+    flipToResult();
   }
 
   function updateAuthUi() {
@@ -492,24 +484,24 @@
     const H = 320;
     const cx = W / 2;
     const cy = H / 2;
-    let html = '<rect width="560" height="320" fill="#faf7f2"/>';
+    let html = '<rect width="560" height="320" fill="#fdfaf6"/>';
 
     [30, 65, 100, 135, 168, 200].forEach((radius) => {
-      html += `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${c3}" stroke-width="0.5" opacity="0.6"/>`;
+      html += `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${c3}" stroke-width="0.5" opacity="0.5"/>`;
     });
 
     for (let i = 0; i < 12; i += 1) {
       const angle = (i / 12) * Math.PI * 2;
       const x2 = cx + Math.cos(angle) * 260;
       const y2 = cy + Math.sin(angle) * 260;
-      html += `<line x1="${cx}" y1="${cy}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${c2}" stroke-width="0.4" opacity="0.18"/>`;
+      html += `<line x1="${cx}" y1="${cy}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${c2}" stroke-width="0.4" opacity="0.15"/>`;
     }
 
     const safeWord = escapeHtml(String(word).slice(0, 2));
     const dateStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
-    html += `<text x="${cx}" y="${cy + 6}" text-anchor="middle" dominant-baseline="middle" font-size="120" fill="${c1}" opacity="0.07" font-family="STSong,SimSun,serif">${safeWord}</text>`;
-    html += `<text x="${cx}" y="${cy + 6}" text-anchor="middle" dominant-baseline="middle" font-size="120" fill="${c1}" opacity="0.75" font-family="STSong,SimSun,serif">${safeWord}</text>`;
-    html += `<text x="${cx}" y="${H - 28}" text-anchor="middle" font-size="13" fill="${c1}" opacity="0.32" font-family="STSong,SimSun,serif">${dateStr}</text>`;
+    html += `<text x="${cx}" y="${cy + 6}" text-anchor="middle" dominant-baseline="middle" font-size="120" fill="${c1}" opacity="0.06" font-family="STSong,SimSun,serif">${safeWord}</text>`;
+    html += `<text x="${cx}" y="${cy + 6}" text-anchor="middle" dominant-baseline="middle" font-size="120" fill="${c1}" opacity="0.7" font-family="STSong,SimSun,serif">${safeWord}</text>`;
+    html += `<text x="${cx}" y="${H - 28}" text-anchor="middle" font-size="13" fill="${c1}" opacity="0.3" font-family="Lora,serif">${dateStr}</text>`;
     els.artSvg.innerHTML = html;
     els.artNote.textContent = `${safeWord} · ${new Date().toLocaleDateString("zh-CN")}`;
   }
@@ -529,18 +521,14 @@
     const crisis = /自杀|轻生|不想活|结束生命|伤害自己|活不下去|suicide|kill myself/i.test(text);
     if (crisis) {
       return {
-        state: "你写下这些，说明你正在承受很重的东西。此刻最重要的不是独自把它想清楚，而是先让自己不要一个人待在危险里。",
-        action: "请现在联系一个可信任的人，或拨打当地紧急电话/危机干预热线。如果你已经有伤害自己的计划，请立刻离开危险物品并寻求现场帮助。",
-        quote: "先活过这一刻。下一步，可以等有人陪你一起看。",
+        entry: "你写下这些，说明你正在承受很重的东西。此刻最重要的不是独自把它想清楚，而是先让自己不要一个人待在危险里。\n\n请现在联系一个你信任的人，或者拨打当地的心理危机干预热线。如果你已经有伤害自己的计划，请立刻离开危险物品，寻求现场帮助。\n\n先活过这一刻。下一步，可以等有人陪你一起看。",
         safety: "crisis",
         art: { word: "援", colors: ["#7c5d64", "#b79298", "#ead8d8"] }
       };
     }
 
     return {
-      state: "你愿意停下来写下这些，本身就是一种整理。很多答案不是想出来的，是在诚实看见以后慢慢露出来的。",
-      action: "离开屏幕五分钟，喝一点水，然后只给今天留一个最小的完成标准。",
-      quote: "认识自己，往往是从承认此刻开始。",
+      entry: "你愿意停下来写下这些，本身就是一种整理。很多答案不是想出来的，是在诚实看见以后慢慢露出来的。\n\n离开屏幕五分钟，喝一点水，然后只给今天留一个最小的完成标准。",
       safety: "normal",
       art: fallbackArt()
     };
@@ -555,53 +543,6 @@
 
   function fallbackArt() {
     return { word: "知", colors: ["#8b6f5e", "#c4a882", "#e8ddd0"] };
-  }
-
-  // ==============================================
-  // 手势处理
-  // ==============================================
-  function handleTouchStart(e) {
-    if (e.touches.length !== 1) return;
-
-    const target = e.target;
-    if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') return;
-
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
-    isSwiping = false;
-  }
-
-  function handleTouchMove(e) {
-    if (touchStartX === 0) return;
-
-    const dx = e.touches[0].clientX - touchStartX;
-    const dy = e.touches[0].clientY - touchStartY;
-
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
-      isSwiping = true;
-    }
-  }
-
-  function handleTouchEnd(e) {
-    if (!isSwiping) {
-      touchStartX = 0;
-      touchStartY = 0;
-      return;
-    }
-
-    const dx = e.changedTouches[0].clientX - touchStartX;
-
-    if (dx < -60 && pageState === PAGE_STATE.INPUT) {
-      if (els.thoughtInput.value.trim()) {
-        handleReflect();
-      }
-    } else if (dx > 60 && pageState === PAGE_STATE.RESULT) {
-      flipBackToInput();
-    }
-
-    touchStartX = 0;
-    touchStartY = 0;
-    isSwiping = false;
   }
 
   function escapeHtml(value) {

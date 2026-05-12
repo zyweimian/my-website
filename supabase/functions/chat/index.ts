@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
 async function loadEntry(authorization: string | null, entryId: string) {
   const { data } = await authClient(authorization)
     .from("reflection_entries")
-    .select("state, action, quote, followup")
+    .select("entry, followup")
     .eq("id", entryId)
     .single();
 
@@ -58,7 +58,7 @@ async function loadEntry(authorization: string | null, entryId: string) {
 async function loadHistory(authorization: string | null) {
   const { data } = await authClient(authorization)
     .from("reflection_entries")
-    .select("state, action, quote, created_at")
+    .select("entry, created_at")
     .order("created_at", { ascending: false })
     .limit(5);
 
@@ -68,7 +68,7 @@ async function loadHistory(authorization: string | null) {
 async function generateReply(message: string, context: unknown, history: unknown[]): Promise<ChatResult> {
   if (isCrisisText(message)) {
     return {
-      reply: fallbackReflection(message).action,
+      reply: fallbackReflection(message).entry,
       source: "fallback",
       errorCode: "crisis_safety_override"
     };
